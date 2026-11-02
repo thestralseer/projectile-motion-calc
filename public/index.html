@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projectile Motion Calculator | C & WebAssembly Physics Engine</title>
+  <meta name="description" content="High-precision interactive projectile motion calculator powered by pure C compiled to WebAssembly with Emscripten. Real-time simulation, comparison mode, and CSV export.">
+  <meta name="keywords" content="projectile motion, physics calculator, WebAssembly, emscripten, kinematics, trajectory simulation">
+  
+  <!-- Modern Google Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20c2-6 8-16 16-16"></path>
+            <circle cx="20" cy="4" r="2" fill="currentColor"></circle>
+            <line x1="4" y1="20" x2="20" y2="20"></line>
+            <line x1="4" y1="4" x2="4" y2="20"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Projectile Motion Calculator</h1>
+          <p class="subtitle">Physics core compiled from pure <code>C</code> to <code>WebAssembly</code> with Emscripten</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <span class="badge wasm-badge" id="wasmStatusBadge" title="Engine status">
+          <span class="pulse-dot"></span> Loading WASM...
+        </span>
+        <button id="themeToggleBtn" class="btn btn-icon" aria-label="Toggle dark/light theme" title="Toggle theme">
+          <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="main-layout">
+      <!-- Left Column: Controls & Inputs -->
+      <aside class="sidebar-panel">
+        <div class="card panel-card">
+          <div class="card-header">
+            <h2>Launch Parameters</h2>
+            <button id="resetDefaultsBtn" class="btn btn-ghost btn-sm" title="Reset all inputs to default test case">
+              Reset
+            </button>
+          </div>
+
+          <!-- Inline Error Banner -->
+          <div id="validationBanner" class="validation-banner hidden" role="alert">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="alert-icon">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span id="validationMessage">Invalid parameters</span>
+          </div>
+
+          <form id="calculatorForm" class="controls-form" onsubmit="return false;">
+            <!-- Initial Velocity -->
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="velocityInput">Initial Velocity (v₀)</label>
+                <span class="unit-badge">m/s</span>
+              </div>
+              <div class="input-with-steppers">
+                <input type="number" id="velocityInput" min="0" max="1000" step="0.1" value="20" required>
+                <div class="quick-presets">
+                  <button type="button" class="chip" data-v="10">10</button>
+                  <button type="button" class="chip active" data-v="20">20</button>
+                  <button type="button" class="chip" data-v="50">50</button>
+                  <button type="button" class="chip" data-v="100">100</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Launch Angle -->
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="angleInput">Launch Angle (θ)</label>
+                <span class="value-display"><span id="angleDisplay">45</span>°</span>
+              </div>
+              <div class="slider-box">
+                <input type="range" id="angleSlider" min="0" max="90" step="1" value="45">
+                <input type="number" id="angleInput" min="0" max="90" step="0.1" value="45" class="compact-number-input">
+              </div>
+              <div class="angle-visual-markers">
+                <span>0° (Flat)</span>
+                <span>30°</span>
+                <span>45° (Max Range)</span>
+                <span>60°</span>
+                <span>90° (Vertical)</span>
+              </div>
+            </div>
+
+            <!-- Initial Height -->
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="heightInput">Initial Height (h₀)</label>
+                <span class="unit-badge">m</span>
+              </div>
+              <div class="slider-box">
+                <input type="range" id="heightSlider" min="0" max="200" step="0.5" value="0">
+                <input type="number" id="heightInput" min="0" max="10000" step="0.5" value="0" class="compact-number-input">
+              </div>
+            </div>
+
+            <!-- Gravity & Celestial Presets -->
+            <div class="control-group">
+              <div class="control-label-row">
+                <label for="gravityInput">Gravity (g)</label>
+                <span class="unit-badge">m/s²</span>
+              </div>
+              <div class="preset-pill-grid">
+                <button type="button" class="preset-pill active" data-g="9.80665" data-preset="earth">
+                  <span class="preset-icon">🌍</span>
+                  <span class="preset-name">Earth</span>
+                  <span class="preset-val">9.81</span>
+                </button>
+                <button type="button" class="preset-pill" data-g="1.62" data-preset="moon">
+                  <span class="preset-icon">🌕</span>
+                  <span class="preset-name">Moon</span>
+                  <span class="preset-val">1.62</span>
+                </button>
+                <button type="button" class="preset-pill" data-g="3.71" data-preset="mars">
+                  <span class="preset-icon">🪐</span>
+                  <span class="preset-name">Mars</span>
+                  <span class="preset-val">3.71</span>
+                </button>
+                <button type="button" class="preset-pill" data-g="24.79" data-preset="jupiter">
+                  <span class="preset-icon">🌌</span>
+                  <span class="preset-name">Jupiter</span>
+                  <span class="preset-val">24.79</span>
+                </button>
+                <button type="button" class="preset-pill" data-preset="custom">
+                  <span class="preset-icon">⚙️</span>
+                  <span class="preset-name">Custom</span>
+                  <span class="preset-val">—</span>
+                </button>
+              </div>
+              <div id="customGravityWrapper" class="custom-gravity-row hidden">
+                <label for="gravityInput">Custom value:</label>
+                <input type="number" id="gravityInput" min="0.01" max="100" step="0.01" value="9.81">
+              </div>
+            </div>
+
+            <!-- Compare Mode Section -->
+            <div class="compare-section">
+              <div class="compare-toggle-box">
+                <div class="compare-text">
+                  <span class="compare-title">Compare Mode</span>
+                  <span class="compare-desc">Retain current trajectory as ghost baseline</span>
+                </div>
+                <button type="button" id="compareToggleBtn" class="btn btn-outline btn-sm">
+                  Pin Baseline
+                </button>
+              </div>
+              <div id="comparisonActiveBadge" class="comparison-active-badge hidden">
+                <span class="badge badge-amber">
+                  Comparing with pinned launch (<span id="pinnedSummary">v₀=20m/s, 45°</span>)
+                </span>
+                <button type="button" id="clearCompareBtn" class="btn-text-danger" title="Clear pinned trajectory">Clear</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Verification / Test Case Callout -->
+        <div class="card verification-card">
+          <div class="verification-header">
+            <span class="badge badge-info">Standard Test Case</span>
+            <button id="loadTestCaseBtn" class="btn btn-xs btn-outline">Load 20m/s @ 45°</button>
+          </div>
+          <p class="verification-desc">
+            With <strong>v₀ = 20 m/s</strong>, <strong>θ = 45°</strong>, <strong>h₀ = 0 m</strong>, <strong>g = 9.81 m/s²</strong>:
+          </p>
+          <div class="verification-expected">
+            <span>Range: <code>40.775 m</code></span>
+            <span>Max Height: <code>10.194 m</code></span>
+            <span>Flight Time: <code>2.883 s</code></span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: Visualization & Results -->
+      <section class="content-panel">
+        <!-- Canvas Simulation Card -->
+        <div class="card canvas-card">
+          <div class="canvas-header">
+            <div class="canvas-title-group">
+              <h2>Trajectory Path & Scale Simulation</h2>
+              <span class="badge badge-subtle" id="scaleIndicator">Scale: Auto</span>
+            </div>
+            
+            <!-- Playback Controls -->
+            <div class="simulation-controls">
+              <button id="playPauseBtn" class="btn btn-primary btn-sm" title="Animate projectile">
+                <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <svg class="pause-icon hidden" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+                <span id="playBtnText">Play</span>
+              </button>
+
+              <button id="resetSimBtn" class="btn btn-outline btn-sm" title="Reset animation to launch point">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="1 4 1 10 7 10"></polyline>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                <span>Reset</span>
+              </button>
+
+              <div class="speed-selector">
+                <label for="simSpeedSelect">Speed:</label>
+                <select id="simSpeedSelect" class="compact-select">
+                  <option value="0.25">0.25×</option>
+                  <option value="0.5">0.5×</option>
+                  <option value="1" selected>1.0×</option>
+                  <option value="2">2.0×</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Canvas Viewport -->
+          <div class="canvas-viewport" id="canvasViewport">
+            <canvas id="trajectoryCanvas"></canvas>
+            
+            <!-- Real-time HUD overlay during animation/scrub -->
+            <div class="canvas-hud" id="canvasHud">
+              <div class="hud-item"><span class="hud-label">t:</span> <span id="hudTime">0.00</span> s</div>
+              <div class="hud-item"><span class="hud-label">x:</span> <span id="hudX">0.00</span> m</div>
+              <div class="hud-item"><span class="hud-label">y:</span> <span id="hudY">0.00</span> m</div>
+              <div class="hud-item"><span class="hud-label">v:</span> <span id="hudV">0.00</span> m/s</div>
+            </div>
+
+            <!-- Canvas Legend -->
+            <div class="canvas-legend">
+              <span class="legend-item"><span class="dot current-dot"></span> Current</span>
+              <span class="legend-item compare-legend-item hidden" id="compareLegendItem"><span class="dot compare-dot"></span> Previous</span>
+              <span class="legend-item"><span class="dot apex-dot"></span> Apex (Max Height)</span>
+              <span class="legend-item"><span class="dot landing-dot"></span> Impact Point</span>
+            </div>
+          </div>
+
+          <!-- Scrubber Timeline Bar -->
+          <div class="timeline-scrubber">
+            <span class="scrub-label">0.00s</span>
+            <input type="range" id="timeScrubber" min="0" max="100" step="0.1" value="0" aria-label="Simulation progress scrubber">
+            <span class="scrub-label" id="scrubberMaxLabel">2.88s</span>
+          </div>
+        </div>
+
+        <!-- Calculated Results Cards Grid -->
+        <div class="results-grid">
+          <!-- Time to Peak -->
+          <div class="card stat-card" id="cardPeakTime">
+            <div class="stat-top">
+              <span class="stat-label">Time to Peak (t_peak)</span>
+              <span class="stat-icon">⏱️</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valPeakTime">1.442</span>
+              <span class="stat-unit">s</span>
+            </div>
+            <div class="stat-sub" id="deltaPeakTime"></div>
+          </div>
+
+          <!-- Max Height -->
+          <div class="card stat-card highlight-card" id="cardMaxHeight">
+            <div class="stat-top">
+              <span class="stat-label">Max Height (y_max)</span>
+              <span class="stat-icon">🏔️</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valMaxHeight">10.194</span>
+              <span class="stat-unit">m</span>
+            </div>
+            <div class="stat-sub" id="deltaMaxHeight"></div>
+          </div>
+
+          <!-- Time of Flight -->
+          <div class="card stat-card" id="cardFlightTime">
+            <div class="stat-top">
+              <span class="stat-label">Time of Flight (t_flight)</span>
+              <span class="stat-icon">⏳</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valFlightTime">2.883</span>
+              <span class="stat-unit">s</span>
+            </div>
+            <div class="stat-sub" id="deltaFlightTime"></div>
+          </div>
+
+          <!-- Range -->
+          <div class="card stat-card highlight-card" id="cardRange">
+            <div class="stat-top">
+              <span class="stat-label">Total Range (R)</span>
+              <span class="stat-icon">🎯</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valRange">40.775</span>
+              <span class="stat-unit">m</span>
+            </div>
+            <div class="stat-sub" id="deltaRange"></div>
+          </div>
+
+          <!-- Impact Speed -->
+          <div class="card stat-card" id="cardImpactSpeed">
+            <div class="stat-top">
+              <span class="stat-label">Impact Speed (v_impact)</span>
+              <span class="stat-icon">⚡</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valImpactSpeed">20.000</span>
+              <span class="stat-unit">m/s</span>
+            </div>
+            <div class="stat-sub" id="deltaImpactSpeed"></div>
+          </div>
+
+          <!-- Impact Angle -->
+          <div class="card stat-card" id="cardImpactAngle">
+            <div class="stat-top">
+              <span class="stat-label">Impact Angle (θ_impact)</span>
+              <span class="stat-icon">📐</span>
+            </div>
+            <div class="stat-value-row">
+              <span class="stat-value" id="valImpactAngle">45.000</span>
+              <span class="stat-unit">°</span>
+            </div>
+            <div class="stat-sub" id="deltaImpactAngle"></div>
+          </div>
+        </div>
+
+        <!-- Kinematic Components Bar -->
+        <div class="card components-card">
+          <div class="component-pill">
+            <span class="comp-label">Horizontal Velocity (vₓ):</span>
+            <span class="comp-val" id="valVx">14.142 m/s</span>
+          </div>
+          <div class="component-divider"></div>
+          <div class="component-pill">
+            <span class="comp-label">Initial Vertical Velocity (vᵧ):</span>
+            <span class="comp-val" id="valVy">14.142 m/s</span>
+          </div>
+          <div class="component-divider"></div>
+          <div class="component-pill">
+            <span class="comp-label">Impact Vertical Velocity:</span>
+            <span class="comp-val" id="valVyImpact">-14.142 m/s</span>
+          </div>
+        </div>
+
+        <!-- Trajectory Data Table with CSV Export -->
+        <div class="card table-card">
+          <div class="table-card-header">
+            <div class="table-title-group">
+              <h3>Trajectory Data Points (x, y, t)</h3>
+              <span class="badge badge-subtle" id="tableRowCountBadge">30 samples</span>
+            </div>
+            <div class="table-actions">
+              <div class="sample-interval-picker">
+                <label for="stepIntervalSelect">Sample rate:</label>
+                <select id="stepIntervalSelect" class="compact-select">
+                  <option value="0.05">0.05 s (High res)</option>
+                  <option value="0.1" selected>0.10 s (Standard)</option>
+                  <option value="0.25">0.25 s</option>
+                  <option value="0.5">0.50 s</option>
+                </select>
+              </div>
+              <button id="downloadCsvBtn" class="btn btn-outline btn-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="table-scroll-container">
+            <table class="data-table" id="trajectoryTable">
+              <thead>
+                <tr>
+                  <th>Time t (s)</th>
+                  <th>Position x (m)</th>
+                  <th>Height y (m)</th>
+                  <th>Velocity vₓ (m/s)</th>
+                  <th>Velocity vᵧ (m/s)</th>
+                  <th>Speed v (m/s)</th>
+                </tr>
+              </thead>
+              <tbody id="trajectoryTableBody">
+                <!-- Dynamically populated via WASM position calculations -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>
+        <strong>Projectile Motion Physics Engine</strong> &bull; Written in pure C &bull; WebAssembly via Emscripten &bull;
+        Zero frontend frameworks.
+      </p>
+    </footer>
+  </div>
+
+  <!-- Emscripten WASM Module Script -->
+  <script src="projectile.js"></script>
+  <!-- Main Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>

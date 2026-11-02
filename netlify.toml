@@ -1,0 +1,19 @@
+# Netlify Configuration for Projectile Motion Calculator
+
+[build]
+  publish = "public"
+  command = "chmod +x build.sh && ./build.sh"
+
+# Ensure proper headers for WebAssembly execution
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
+# Explicit MIME type for WebAssembly binaries
+[[headers]]
+  for = "*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+    Cache-Control = "public, max-age=31536000, immutable"
